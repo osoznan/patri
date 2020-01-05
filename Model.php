@@ -20,7 +20,7 @@ class Model extends TopObject {
         $attributes ? $this->load($attributes) : null;
     }
 
-    public function tableName() {
+    public static function tableName() {
         return null;
     }
 
@@ -45,7 +45,7 @@ class Model extends TopObject {
             if (!is_callable($validator)) {
                 $result = ModelValidator::$validator($this->$attribute ?? null, $param);
                 if ($result !== true) {
-                    $this->errors[$attribute] = ($this::getLabel($attribute) ?? $attribute) . ': ' . $result;
+                    $this->errors[$attribute] = $result;
                 }
             } else {
                 call_user_func($validator, $this);
@@ -60,9 +60,11 @@ class Model extends TopObject {
     }
 
     public function load(array $data) {
-        foreach ($data as $field => $value) {
-            if (in_array($field, $this->attributes())) {
-                $this->$field = $value;
+        foreach ($this->attributes() as $value) {
+            if (isset($data[$value])) {
+                $this->$value = $data[$value];
+            } else {
+                $this->$value = null;
             }
         }
 

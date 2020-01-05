@@ -106,7 +106,6 @@ class Query {
 
     public function all() {
         $query = $this->getSqlCommand();
-
         $res = mysqli_query(Db::connect(), $query);
         $rows = [];
 
@@ -172,7 +171,11 @@ class Query {
         $limit = $limit ?? null;
         $offset = $offset ?? null;
 
-        return "SELECT $select FROM `{$this->model->tableName()}` $join $where $order $group $limit $offset";
+        return "SELECT $select FROM `" . $this->modelClass::tableName() . "` $join $where $order $group $limit $offset";
+    }
+
+    public function getModelClass() {
+        return $this->modelClass;
     }
 
     public static function _processWhere($clause) {
