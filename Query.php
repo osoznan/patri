@@ -5,7 +5,7 @@ namespace app\system;
 class Query {
 
     /** @var Model */
-    private $model;
+    private $modelClass;
     private $selects = [];
     private $wheres = [];
     private $orders = [];
@@ -16,8 +16,8 @@ class Query {
 
     private $isArrayResult = false;
 
-    public function __construct($model) {
-        $this->model = $model;
+    public function __construct($class) {
+        $this->modelClass = $class;
     }
 
     public function select($data) {
@@ -110,19 +110,15 @@ class Query {
         $res = mysqli_query(Db::connect(), $query);
         $rows = [];
 
-        $class = get_class($this->model);
-
         if ($this->isArrayResult) {
             for ($i = 0; $i < ($res ? $res->num_rows : 0); $i++) {
                 $row = mysqli_fetch_assoc($res);
-
                 $rows[$row['id']] = $row;
             }
         } else {
             for ($i = 0; $i < ($res ? $res->num_rows : 0); $i++) {
                 $row = mysqli_fetch_assoc($res);
-
-                $rows[$row['id']] = new $class($row);
+                $rows[$row['id']] = new $this->modelClass($row);
             }
         }
 
@@ -177,10 +173,6 @@ class Query {
         $offset = $offset ?? null;
 
         return "SELECT $select FROM `{$this->model->tableName()}` $join $where $order $group $limit $offset";
-    }
-
-    public function getModel() {
-        return $this->model;
     }
 
     public static function _processWhere($clause) {

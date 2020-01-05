@@ -77,8 +77,8 @@ class Model extends TopObject {
         return static::$labels[$name] ?? null;
     }
 
-    public function find() {
-        return new Query($this);
+    public static function find() {
+        return new Query(static::class);
     }
 
     public function insert(array $data) {
