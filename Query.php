@@ -91,7 +91,7 @@ class Query {
         $this->remSelects = join(',', $this->selects);
         $this->selects = ['COUNT(*) as count'];
 
-        $res = $this->one();
+        $res = $this->asArray()->one();
 
         $this->selects = explode(',', $this->remSelects);
 
@@ -128,7 +128,13 @@ class Query {
         $query = $this->getSqlCommand();
 
         $res = mysqli_query(Db::connect(), $query);
+
         $row = mysqli_fetch_assoc($res);
+        if (!$row) {
+            return false;
+        } elseif (!$this->isArrayResult) {
+            $row = new $this->modelClass($row);
+        }
 
         return $row;
     }

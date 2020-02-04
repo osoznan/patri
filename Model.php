@@ -14,7 +14,6 @@ class Model extends TopObject {
     protected $rows;
 
     protected $errors;
-    protected static $labels;
 
     public function __construct(array $attributes = null) {
         $attributes ? $this->load($attributes) : null;
@@ -27,6 +26,11 @@ class Model extends TopObject {
     public function rules() {
         return [];
     }
+
+    public static function labels() {
+        return [];
+    }
+
 
     /**
      * Validation process of a single record data, must be overriden in a child model to perform a check
@@ -59,14 +63,29 @@ class Model extends TopObject {
         return [];
     }
 
+    public function getAttributes() {
+        $attrs = [];
+        foreach (array_merge($this->attributes(), ['id']) as $value) {
+            if (isset($this->$value)) {
+                $attrs[$value] = $this->$value;
+            } else {
+                $attrs[$value] = null;
+            }
+        }
+
+        return $attrs;
+    }
+
     public function load(array $data) {
-        foreach ($this->attributes() as $value) {
+        foreach (array_merge($this->attributes(), ['id' => $data['id'] ?? null]) as $value) {
             if (isset($data[$value])) {
                 $this->$value = $data[$value];
             } else {
                 $this->$value = null;
             }
         }
+
+        $this->id = $data['id'] ?? null;
 
         return true;
     }
@@ -76,11 +95,27 @@ class Model extends TopObject {
     }
 
     public static function getLabel($name) {
-        return static::$labels[$name] ?? null;
+        return isset(static::labels()[$name]) ? ucfirst(static::labels()[$name]) : $name;
     }
 
     public static function find() {
         return new Query(static::class);
+    }
+
+    public function save() {
+        $data = [];
+        foreach ($this->attributes() as $attr) {
+            $data[$attr] = $this->$attr;
+        }
+
+        if ($this->id) {
+            $this->update($data, ['id' => $this->id]);
+        } else {
+            $result = $this->insert($data);
+            if ($result) {
+                $this->id = $result;
+            }
+        }
     }
 
     public function insert(array $data) {
@@ -88,7 +123,7 @@ class Model extends TopObject {
 
         foreach ($data as $key => $value) {
             $fields[] = "`" . $key . "`";
-            $values[] = "'" . $value . "'";
+            $values[] = (isset($value) ? "'$value'" : 'NULL');;
         }
 
         $fields = join(',', $fields);
@@ -100,13 +135,17 @@ class Model extends TopObject {
     }
 
     public function update(array $values, $where) {
+        $where = $where ? ' WHERE ' . Query::_processWhere($where) : null;
+
         $fields = [];
         foreach ($values as $key => $value) {
-            $fields[] = "$key = '$value'";
+            $fields[] = "$key = " . (isset($value) ? "'$value'" : 'NULL');
         }
         $fieldsStr = join(', ', $fields);
 
-        return Db::execute("UPDATE `". $this->tableName() . "` SET $fieldsStr " . ($where ? " WHERE $where" : null)) !== false;
+
+
+        return Db::execute("UPDATE `". $this->tableName() . "` SET $fieldsStr " . $where) !== false;
     }
 
     public function delete($where) {
@@ -118,5 +157,15 @@ class Model extends TopObject {
     public function count() {
         $result = mysqli_query(Db::connect(), "SELECT COUNT(*) FROM `". $this->tableName() . "`");
         return mysqli_fetch_row($result)[0];
+    }
+
+    public static function addFieldLabelsToErrorMessages($errors) {
+        if (!empty($errors)) {
+            foreach ($errors as $attr => &$error) {
+                $error = (static::labels()[$attr] ?? $attr) . ': ' . $error;
+            }
+        }
+
+        return $errors;
     }
 }

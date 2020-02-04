@@ -5,6 +5,8 @@
 
 namespace app\system;
 
+use mysql_xdevapi\Exception;
+
 class App {
 
     public static $defaultControllerName = 'site';
@@ -28,26 +30,52 @@ class App {
      * @return array
      */
     private function urlPartsToRouteElements($url) {
-        $urlPath = trim(explode('?', $url)[0], '/');
+        $parts = explode('?', $url);
+        $urlPath = trim($parts[0], '/');
 
-        $urlPathParts = explode('/', $urlPath);
-        $count = count($urlPathParts);
-
-        $controller = static::$defaultControllerName;
-        $action = 'index';
-
-        if ($count > 1) {
-            $controller = $urlPathParts[$count - 2];
-            $action = $urlPathParts[$count - 1];
-        } elseif ($count == 1 && !empty($urlPathParts[0])) {
-            // action is also here
-            $action = $urlPathParts[$count - 1];
+        // if query string exist, set GET data properly
+        if (isset($parts[1])) {
+            foreach (explode('&', $parts[1]) as $pair) {
+                $elem = explode('=', $pair);
+                $_GET[$elem[0]] = $elem[1];
+            }
         }
 
-        return [
-            'controller' => $controller,
-            'action' => $action,
-        ];
+        $urlPathParts = explode('/', $urlPath);
+
+        $curPath = '';
+        $basePath = self::basePath() . '/controllers';
+        for ($i = 0; $i < count($urlPathParts); $i++) {
+            $part = $urlPathParts[$i];
+            if (empty($part)) {
+                $part = 'site';
+            }
+
+            $nextProbablyDir = $basePath . '/' . $curPath . '/' . $part;
+            if (is_dir($nextProbablyDir)) {
+                $curPath .= '/' . $part;
+            } elseif (is_file($basePath . '/' . $curPath . '/' . ucfirst($part) . 'Controller.php')) {
+
+                $fullClassName = 'app\\controllers' . str_replace('/', '\\', $curPath) . '\\' . ucfirst($part) . 'Controller';
+
+                if (class_exists($fullClassName)) {
+                    $controllerInstance = new $fullClassName();
+                    $action = $urlPathParts[$i + 1] ?? 'index';
+                    $action = str_replace('-', '_', $action);
+
+                    if (method_exists($controllerInstance, "action" . ucfirst($action))) {
+                        return [
+                            'controller' => $controllerInstance,
+                            'action' => $action
+                        ];
+                    } else {
+                       throw new \Exception('wrong controller action: ' . $action);
+                    }
+                } else {
+                    throw new \Exception('wrong controller class: ' . $fullClassName);
+                }
+            }
+        }
     }
 
     /**
@@ -56,48 +84,51 @@ class App {
      * @param $url
      */
     public function run($url) {
+        if ($mapResult = $this->resolveUrlByControllerMap($url)) {
+            $url = $mapResult;
+        }
+
         $routeInfo = $this->urlPartsToRouteElements($url);
 
-        $controller = ucfirst($routeInfo['controller']);
+        $controller = $routeInfo['controller'];
         $action = $routeInfo['action'];
 
-        $fullClassName = "app\\controllers\\{$controller}Controller";
-
         try {
-            if (class_exists($fullClassName)) {
-                /** @var $controllerInstance Controller */
-                $controllerInstance = new $fullClassName();
+            // here goes all!
+            if (!isset($_POST['ajax'])) {
+                ob_start();
+                ob_implicit_flush(false);
 
-                $action = str_replace('-', '_', $action);
+                $controllerOutput = $controller->run($action);
 
-                if (method_exists($controllerInstance, "action" . ucfirst($action))) {
+                $out = ob_get_clean() . $controllerOutput;
 
-                    // here goes all!
-                    if (!isset($_POST['ajax'])) {
-                        ob_start();
-                        ob_implicit_flush(false);
-
-                        $controllerOutput = $controllerInstance->run($action);
-
-                        $out = ob_get_clean() . $controllerOutput;
-
-                        $totalOutput = View::render('frames/' . $controllerInstance::$frameName, [
-                            'content' => $out
-                        ]);
-                    } else {
-                        $controllerInstance->run($action);
-                    }
-
-                    // ЗДЕСЬ ВСЁ И ВЫВОДИТСЯ!!
-                    echo $totalOutput ?? null;
-
-                } else {
-                    $controllerInstance->error404();
-                }
+                $totalOutput = View::render('frames/' . $controller::$frameName, [
+                    'content' => $out
+                ]);
+            } else {
+                echo $controller->run($action);
             }
+
+            // ЗДЕСЬ ВСЁ И ВЫВОДИТСЯ!!
+            echo $totalOutput ?? null;
+
         } catch (\Exception $e) {
             throw new \Exception($e->getMessage());
         }
+    }
+
+    protected function resolveUrlByControllerMap($url) {
+        $map = App::getConfig('controllerMap');
+
+        foreach ($map as $pattern => $replace) {
+            $result = preg_replace('/' . $pattern . '/', $replace, $url, 1, $count);
+            if ($count) {
+                return $result;
+            }
+        }
+
+        return false;
     }
 
     public static function basePath() {
