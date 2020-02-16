@@ -5,7 +5,7 @@
 
 namespace app\system;
 
-use mysql_xdevapi\Exception;
+use app\controllers\SiteController;
 
 class App {
 
@@ -48,7 +48,7 @@ class App {
         for ($i = 0; $i < count($urlPathParts); $i++) {
             $part = $urlPathParts[$i];
             if (empty($part)) {
-                $part = 'site';
+                $part = self::$defaultControllerName;
             }
 
             $nextProbablyDir = $basePath . '/' . $curPath . '/' . $part;
@@ -74,6 +74,8 @@ class App {
                 } else {
                     throw new \Exception('wrong controller class: ' . $fullClassName);
                 }
+            } else {
+                throw new \Exception('wrong route');
             }
         }
     }
@@ -88,10 +90,15 @@ class App {
             $url = $mapResult;
         }
 
-        $routeInfo = $this->urlPartsToRouteElements($url);
+        try {
+            $routeInfo = $this->urlPartsToRouteElements($url);
 
-        $controller = $routeInfo['controller'];
-        $action = $routeInfo['action'];
+            $controller = $routeInfo['controller'];
+            $action = $routeInfo['action'];
+        } catch (\Exception $e) {
+            $controller = new SiteController();
+            $action = 'error';
+        }
 
         try {
             // here goes all!
@@ -114,7 +121,7 @@ class App {
             echo $totalOutput ?? null;
 
         } catch (\Exception $e) {
-            throw new \Exception($e->getMessage());
+
         }
     }
 

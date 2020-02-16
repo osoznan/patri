@@ -13,6 +13,7 @@ class Db {
         if (!static::$connect) {
             $db = App::getConfig('db');
             static::$connect = mysqli_connect($db['host'], $db['user'], $db['password'], $db['database']);
+            mysqli_set_charset(static::$connect,'utf8');
             if (!static::$connect) {
                 throw new \ErrorException('Ошибка подключения к базе');
             }

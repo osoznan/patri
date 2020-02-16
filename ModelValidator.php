@@ -34,4 +34,12 @@ class ModelValidator {
         return true;
     }
 
+    public static function regexp($value, $regexp) {
+        if (preg_match($regexp[2], $value) === 0) {
+            return 'Неверный ввод';
+        }
+
+        return true;
+    }
+
 }
