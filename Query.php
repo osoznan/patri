@@ -1,8 +1,15 @@
 <?php
+/**
+ * User: Zemlyansky Alexander <astrolog@online.ua>
+ */
 
 namespace app\system;
 
-class Query {
+/**
+ * Class Query
+ * The Query builder for MySQL
+ */
+class Query extends TopObject {
 
     /** @var Model */
     private $modelClass;
@@ -59,7 +66,7 @@ class Query {
         return $this;
     }
 
-    public function limit($count) {
+    public function limit($count = null) {
         $this->limit = $count;
 
         return $this;
@@ -72,6 +79,9 @@ class Query {
     }
 
     public function where($data) {
+        if (!$data) {
+            return $this;
+        }
         $this->wheres[] = $this->_processWhere($data);
 
         return $this;
@@ -79,7 +89,7 @@ class Query {
 
     public function join($type, $table, $on) {
         $this->joins[] = [
-            'type' => $type,
+            'type' => $type . ' JOIN',
             'table' => $table,
             'on' => $on
         ];
@@ -95,7 +105,7 @@ class Query {
 
         $this->selects = explode(',', $this->remSelects);
 
-        return $res['count'];
+        return (int)$res['count'];
     }
 
     public function asArray() {
@@ -106,7 +116,7 @@ class Query {
 
     public function all() {
         $query = $this->getSqlCommand();
-        $res = mysqli_query(Db::connect(), $query);
+        $res = Top::$app->db->execute($query);
         $rows = [];
 
         if ($this->isArrayResult) {
@@ -127,7 +137,7 @@ class Query {
     public function one() {
         $query = $this->getSqlCommand();
 
-        $res = mysqli_query(Db::connect(), $query);
+        $res = Top::$app->db->execute($query);
 
         $row = mysqli_fetch_assoc($res);
         if (!$row) {
@@ -184,10 +194,31 @@ class Query {
         return $this->modelClass;
     }
 
+    /**
+     * adds if needed: sql quotes, escapes characters
+     */
+    public static function toSqlFieldValue($v) {
+        if ($v === null) {
+            return 'NULL';
+        }
+
+        if (filter_var($v, FILTER_VALIDATE_FLOAT || FILTER_VALIDATE_INT) !== FALSE) {
+            return $v;
+        } else {
+            // escape if string and add quotes
+            return "'" . str_replace("'", "''", $v) . "'";
+        }
+    }
+
+
     public static function _processWhere($clause) {
         if (is_array($clause)) {
             $key = array_keys($clause)[0];
             if (is_array($clause[$key])) {
+                foreach ($clause[$key] as &$fldValue) {
+                    $fldValue = static::toSqlFieldValue($fldValue);
+                }
+
                 return $key . ' IN (' . join(', ', $clause[$key]) . ')';
             } else {
                 $operation = $clause[1] ?? '=';

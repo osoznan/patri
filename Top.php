@@ -1,7 +1,13 @@
 <?php
-/**
- * Created by PhpStorm.
- * User: Garmizilitnik
- * Date: 28.05.2020
- * Time: 22:51
- */
+
+namespace app\system;
+
+/** class Top
+ * The "top object" / entry point for access to all parts of the framework
+ **/
+class Top {
+
+    /** @var App */
+    public static $app;
+
+}

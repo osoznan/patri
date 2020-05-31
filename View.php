@@ -9,9 +9,11 @@ namespace app\system;
  * Class View
  * The base View object
  */
-class View extends TopObject {
+class View extends Component {
 
-    public static function render($viewName, $params = []) {
+    static $_cssFiles = [];
+
+    public function render($viewName, $params = []) {
         ob_start();
         ob_implicit_flush(false);
 
@@ -19,8 +21,12 @@ class View extends TopObject {
             $$param = $value;
         }
 
-        $a = require("views/$viewName.php");
+        require(Top::$app->basePath . "/views/$viewName.php");
 
         return ob_get_clean();
+    }
+
+    public function insertCssFile($file) {
+
     }
 }

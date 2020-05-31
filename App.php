@@ -5,84 +5,51 @@
 
 namespace app\system;
 
-use app\controllers\SiteController;
+use app\site\controllers\SiteController;
 
-class App {
 
-    public static $defaultControllerName = 'site';
+class App extends Component {
+    const EVENT_AFTER_RUN = 'after-run';
 
-    protected static $config;
+    public $defaultControllerName = 'site';
 
-    public static function getConfig($param) {
-        if (!static::$config) {
-            $config = require('config/config.php');
-            return $config[$param];
-        }
+    public $config;
 
-        return static::$config;
+    /** @var Controller */
+    public $controller;
+
+    public $basePath;
+
+    public $components = [];
+
+    public $action;
+
+    /** @var Db */
+    public $db;
+
+    public $csrfToken;
+
+    public function init() {
+        $this->db = $this->get('db');
     }
 
-    /**
-     * Convert url to framework router params.
-     * Just over-simple thing, no special checks made (BeeJee task doesn't wait too long)
-     *
-     * @param $url string Url to show
-     * @return array
-     */
-    private function urlPartsToRouteElements($url) {
-        $parts = explode('?', $url);
-        $urlPath = trim($parts[0], '/');
+    public function getConfig($selector) {
+        $keys = explode('.', $selector);
 
-        // if query string exist, set GET data properly
-        if (isset($parts[1])) {
-            foreach (explode('&', $parts[1]) as $pair) {
-                $elem = explode('=', $pair);
-                $_GET[$elem[0]] = $elem[1];
-            }
-        }
-
-        $urlPathParts = explode('/', $urlPath);
-
-        $curPath = '';
-        $basePath = self::basePath() . '/controllers';
-        for ($i = 0; $i < count($urlPathParts); $i++) {
-            $part = $urlPathParts[$i];
-            if (empty($part)) {
-                $part = self::$defaultControllerName;
-            }
-
-            $nextProbablyDir = $basePath . '/' . $curPath . '/' . $part;
-            if (is_dir($nextProbablyDir)) {
-                $curPath .= '/' . $part;
-            } elseif (is_file($basePath . '/' . $curPath . '/' . ucfirst($part) . 'Controller.php')) {
-
-                $fullClassName = 'app\\controllers' . str_replace('/', '\\', $curPath) . '\\' . ucfirst($part) . 'Controller';
-
-                if (class_exists($fullClassName)) {
-                    $controllerInstance = new $fullClassName();
-                    $action = $urlPathParts[$i + 1] ?? 'index';
-                    $action = str_replace('-', '_', $action);
-
-                    if (method_exists($controllerInstance, "action" . ucfirst($action))) {
-                        return [
-                            'controller' => $controllerInstance,
-                            'action' => $action
-                        ];
-                    } else {
-                       throw new \Exception('wrong controller action: ' . $action);
-                    }
-                } else {
-                    throw new \Exception('wrong controller class: ' . $fullClassName);
-                }
+        $config = [$this->config];
+        foreach ($keys as $key) {
+            $curr = end($config);
+            if (isset($curr[$key])) {
+                $config[] = $curr[$key];
             } else {
-                throw new \Exception('wrong route');
+                return null;
             }
         }
+        return end($config);
     }
 
     /**
      * Launches the framework itself
-     *
      * @param $url
      */
     public function run($url) {
@@ -91,42 +58,49 @@ class App {
         }
 
         try {
-            $routeInfo = $this->urlPartsToRouteElements($url);
+            $router = new Router(['application' => $this]);
+            $routeInfo = $router->getData($url);
 
-            $controller = $routeInfo['controller'];
-            $action = $routeInfo['action'];
+            $this->controller = $routeInfo['controller'];
+            $this->action = $routeInfo['action'];
+            $this->basePath = $routeInfo['path'];
+
         } catch (\Exception $e) {
-            $controller = new SiteController();
-            $action = 'error';
+            $this->controller = new SiteController();
+            $this->action = 'error';
         }
 
         try {
             // here goes all!
-            if (!isset($_POST['ajax'])) {
+            if (!Request::isAjax()) {
                 ob_start();
                 ob_implicit_flush(false);
 
-                $controllerOutput = $controller->run($action);
-
+                $controllerOutput = $this->controller->run($this->action);
                 $out = ob_get_clean() . $controllerOutput;
 
-                $totalOutput = View::render('frames/' . $controller::$frameName, [
+                $view = new View();
+                $totalOutput = $view->render('_frames/' . $this->controller::$frameName, [
                     'content' => $out
                 ]);
+
             } else {
-                echo $controller->run($action);
+                echo $this->controller->run($this->action);
             }
 
             // ЗДЕСЬ ВСЁ И ВЫВОДИТСЯ!!
             echo $totalOutput ?? null;
 
-        } catch (\Exception $e) {
+            $this->trigger(self::EVENT_AFTER_RUN);
 
+        } catch (\Exception $e) {
+            $this->controller->error404();
+            echo $e->getMessage();
         }
     }
 
     protected function resolveUrlByControllerMap($url) {
-        $map = App::getConfig('controllerMap');
+        $map = $this->getConfig('controllerMap');
 
         foreach ($map as $pattern => $replace) {
             $result = preg_replace('/' . $pattern . '/', $replace, $url, 1, $count);
@@ -138,8 +112,41 @@ class App {
         return false;
     }
 
-    public static function basePath() {
-        return $_SERVER['DOCUMENT_ROOT'];
+    public function get($name) {
+        if (!isset($this->components[$name]) || is_array($this->components[$name])) {
+            if (!($conf = $this->getConfig("components.$name"))) {
+                return null;
+            }
+
+            $class = $conf['class'];
+            $component = new $class();
+
+            $this->setConfig($component, $conf);
+
+            $this->components[$name] = $component;
+        }
+
+        return $this->components[$name];
     }
 
+    public function getCsrfToken() {
+        if (!isset($this->csrfToken)) {
+            $this->csrfToken = md5(time() . rand(0, 1000000));
+            $_SESSION['_csrfToken'] = $this->csrfToken;
+        }
+
+        return $this->csrfToken;
+    }
+
+    public static function checkCsrfToken() {
+        return true;
+
+        if (count(Request::post())) {
+            if (Request::post('_csrf') != $_SESSION['_csrfToken']) {
+                return false;
+            }
+        }
+
+        return true;
+    }
 }

@@ -5,28 +5,42 @@
 
 namespace app\system;
 
-class Db {
+/**
+ * Class Db
+ * Db component
+ */
+class Db extends Component {
+    const EVENT_AFTER_SQL = 'after-sql';
 
-    public static $connect;
+    public $host;
+    public $user;
+    public $password;
+    public $database;
 
-    public static function connect() {
-        if (!static::$connect) {
-            $db = App::getConfig('db');
-            static::$connect = mysqli_connect($db['host'], $db['user'], $db['password'], $db['database']);
-            mysqli_set_charset(static::$connect,'utf8');
-            if (!static::$connect) {
-                throw new \ErrorException('Ошибка подключения к базе');
+    private $connect;
+
+    public function connect() {
+        if (!$this->connect) {
+            $this->connect = mysqli_connect($this->host, $this->user, $this->password, $this->database);
+            mysqli_set_charset($this->connect,'utf8');
+
+            if (!$this->connect) {
+                throw new \ErrorException('Database connection error');
             }
         }
 
-        return static::$connect;
+        return $this->connect;
     }
 
-    public static function execute($query) {
-        $res = mysqli_query(static::connect(), $query);
+    public function execute($query) {
+        $res = mysqli_query($this->connect(), $query);
+
+        $ev = new Event();
+        $ev->data = ['sql' => $query, 'success' => $res];
+        $this->trigger(self::EVENT_AFTER_SQL, $ev);
 
         if ($res == false) {
-            throw new \ErrorException('Ошибка в запросе: ' . $query);
+            throw new \ErrorException('Ошибка выполнения запроса: ' . $query);
         }
 
         return $res;

@@ -1,4 +1,7 @@
 <?php
+/**
+ * User: Zemlyansky Alexander <astrolog@online.ua>
+ */
 
 namespace app\system;
 

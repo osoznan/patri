@@ -2,18 +2,16 @@
 
 namespace app\system;
 
+/**
+ * Class Router
+ * Makes route from url to controller/action and params
+ */
 class Router extends Component {
-
-    public $url;
+    /** @var App */
+    public $application;
 
     public $controller;
     public $action;
-
-
-    protected function getController($controllerPath) {
-
-    }
-
 
     /**
      * Convert url to framework router params.
@@ -34,50 +32,56 @@ class Router extends Component {
 
         $urlPathParts = explode('/', $urlPath);
 
-        var_dump($urlPathParts); echo '<br>';
+       // var_dump($urlPathParts); echo '<br>';
 
         $curPath = '';
-        $basePath = self::basePath() . 'modules';
-        foreach ($urlPathParts as $part) {
-            if (empty($part)) {
-                $part = $this->defaultControllerName;
-            }
+        $basePath = $this->application->basePath . 'apps';
 
-            echo $curPath. '<br>';
+        $part = reset($urlPathParts);
 
-            echo $basePath . '/' . $curPath . '/' . ucfirst($part) . 'Controller.php' . '<br>';
-
+        do {
             if (is_dir($basePath . '/' . $curPath)) {
-                if (is_file($basePath . '/' . $curPath . '/' . 'Module.php')) {
-                    $curPath .= '/controllers/' . $part;
+                $nextPart = next($urlPathParts);
+
+                // if there is module then get the controllers dir and find the target there
+                if (is_file($basePath . '/' . $part . '/' . 'App.php')) {
+                    $curPath .= ($part . '/controllers');
+
+                    $basePath . '/' . $curPath . '/' . ucfirst($nextPart) . 'Controller.php';
+
+                    if (is_file($basePath . '/' . $curPath . '/' . ucfirst($nextPart) . 'Controller.php')) {
+
+                        $fullClassName = 'app\\' . str_replace('/', '\\', $curPath) . '\\' . ucfirst($nextPart) . 'Controller';
+
+                        if (class_exists($fullClassName)) {
+                            $controllerInstance = new $fullClassName();
+
+                            $action = next($urlPathParts);
+                            $action = $action ? $action : 'index';
+                            $action = str_replace('-', '_', $action);
+
+                            if (method_exists($controllerInstance, "action" . ucfirst($action))) {
+                                return [
+                                    'controller' => $controllerInstance,
+                                    'action' => $action,
+                                    'path' => $basePath . '/' . $part
+                                ];
+                            } else {
+                                throw new \Exception('wrong controller action: ' . $action);
+                            }
+                        } else {
+                            throw new \Exception('wrong controller class: ' . $fullClassName);
+                        }
+                    }
+
                 } else {
                     $curPath .= $part;
                 }
 
-            } elseif (is_file($basePath . '/' . $curPath . '/' . ucfirst($part) . 'Controller.php')) {
-
-                $fullClassName = 'app\\controllers' . str_replace('/', '\\', $curPath) . '\\' . ucfirst($part) . 'Controller';
-
-                if (class_exists($fullClassName)) {
-                    $controllerInstance = new $fullClassName();
-                    $action = $urlPathParts[$i + 1] ?? 'index';
-                    $action = str_replace('-', '_', $action);
-
-                    if (method_exists($controllerInstance, "action" . ucfirst($action))) {
-                        return [
-                            'controller' => $controllerInstance,
-                            'action' => $action
-                        ];
-                    } else {
-                        throw new \Exception('wrong controller action: ' . $action);
-                    }
-                } else {
-                    throw new \Exception('wrong controller class: ' . $fullClassName);
-                }
             } else {
                 throw new \Exception('wrong route: ' . $curPath);
             }
-        }
+        } while ($part = next($urlPathParts));
     }
 
 }
