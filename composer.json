@@ -1,0 +1,32 @@
+{
+  "name": "osoznan/patri",
+  "description": "Small mvc php framework",
+  "type": "framework",
+  "keywords": ["php framework", "mvc"],
+  "license": "BSD-3-Clause",
+  "authors": [
+    {
+      "name": "Alexander Zemlyansky",
+      "email": "astrolog@online.ua"
+    }
+  ],
+  "require-dev": {
+    "kahlan/kahlan": "^4.7"
+  },
+  "autoload": {
+    "psr-4": {
+      "osoznan\\patri\\": "src/"
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "osoznan\\patri\\tests\\": "tests/"
+    }
+  },
+  "extra": {
+    "asset-installer-paths": {
+      "npm-asset-library": "vendor/npm",
+      "bower-asset-library": "vendor/bower"
+    }
+  }
+}
